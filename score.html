@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>課堂加分系統</title>
+  <!-- 引入 Chart.js (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    /* 基本重置與字型 */
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+    body { background: linear-gradient(135deg, #f8c3a4, #ebb094); min-height: 100vh; }
+    .container {
+      width: 90%; max-width: 1200px; margin: 20px auto; padding: 20px;
+      background-color: rgba(255,255,255,0.95); border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2); position: relative;
+    }
+    h1 { text-align: center; margin-bottom: 20px; }
+
+    /* 主功能按鈕 */
+    #mainControls { text-align: center; margin-bottom: 20px; }
+    #mainControls button {
+      margin: 0 5px; padding: 8px 16px; border: none; border-radius: 4px;
+      background-color: #fa8072; color: #fff; cursor: pointer;
+    }
+    #mainControls button:hover { opacity: 0.85; }
+
+    /*************** 月曆畫面 ***************/
+    #calendarView { display: block; }
+    .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .calendar-header button {
+      background-color: #fa8072; color: #fff; border: none; padding: 6px 12px; border-radius: 4px;
+    }
+    .calendar-header button:hover { opacity: 0.85; }
+    .calendar-header h2 { font-size: 1.2rem; }
+    table.calendar { width: 100%; border-collapse: collapse; text-align: center; margin-bottom: 20px; }
+    table.calendar thead { background-color: #f0f0f0; }
+    table.calendar th, table.calendar td {
+      padding: 8px; border: 1px solid #ddd; width: 14.28%; height: 60px; vertical-align: middle;
+    }
+    table.calendar td.empty { background-color: #f9f9f9; color: #ccc; }
+    table.calendar td a {
+      display: inline-block; width: 40px; height: 40px; line-height: 40px; text-decoration: none;
+      color: #333; border-radius: 50%; transition: background-color 0.2s;
+    }
+    table.calendar td a:hover { background-color: #ffd5c8; }
+    table.calendar td a.today { background-color: #ffcab5; font-weight: bold; }
+
+    /*************** 加扣分畫面 ***************/
+    #scoreView { display: none; text-align: center; }
+    #scoreView .btn-bar { margin-bottom: 10px; }
+    #scoreView .btn-bar button {
+      margin: 0 5px; padding: 6px 12px; border: none; border-radius: 4px;
+      background-color: #9b4e84; color: #fff; cursor: pointer;
+    }
+    #scoreView .btn-bar button:hover { opacity: 0.8; }
+    #scoreDateTitle { margin-bottom: 10px; }
+    #classSelect { margin-bottom: 10px; padding: 4px; }
+    #scoreTable { margin: 0 auto; border-collapse: collapse; min-width: 550px; }
+    #scoreTable th, #scoreTable td { border: 1px solid #ccc; padding: 8px 12px; text-align: center; }
+    .plus-btn, .minus-btn {
+      padding: 2px 6px; margin: 0 4px; background-color: #2db082; color: #fff; border: none;
+      border-radius: 4px; cursor: pointer;
+    }
+    .minus-btn { background-color: #eb6969; }
+    .plus-btn:hover, .minus-btn:hover { opacity: 0.8; }
+    .infraction-btn, .view-infraction-btn {
+      padding: 2px 6px; margin: 0 4px; background-color: #f5b971; color: #fff; border: none;
+      border-radius: 4px; cursor: pointer;
+    }
+    .infraction-btn:hover, .view-infraction-btn:hover { opacity: 0.8; }
+    .max-score { color: red; font-weight: bold; }
+
+    /*************** 每月統計圖表 ***************/
+    #monthlyChartView { display: none; text-align: center; }
+    #monthlyChartView .chart-header { margin-bottom: 10px; }
+    #monthlyChartView .chart-header select { padding: 4px; margin: 0 5px; }
+    #chartContainer { width: 80%; max-width: 800px; margin: 0 auto; height: 400px; }
+
+    /*************** 分組管理畫面 ***************/
+    #groupView {
+      display: none; padding: 10px;
+    }
+    #groupView .btn-bar { margin-bottom: 10px; text-align: center; }
+    #groupView .btn-bar button {
+      margin: 0 5px; padding: 6px 12px; border: none; border-radius: 4px;
+      background-color: #9b4e84; color: #fff; cursor: pointer;
+    }
+    #groupView .btn-bar button:hover { opacity: 0.8; }
+    #groupDateTitle { margin-bottom: 10px; }
+    #groupContainer { margin-top: 10px; }
+    .group-panel {
+      border: 1px solid #ccc; border-radius: 4px; padding: 8px; margin-bottom: 10px;
+    }
+    .group-panel h3 { margin-bottom: 8px; }
+    .group-score { margin: 4px 0; }
+    .group-score button { padding: 2px 6px; margin: 0 4px; border: none; border-radius: 4px; cursor: pointer; }
+    .group-score button:hover { opacity: 0.8; }
+    .group-members { margin-top: 6px; }
+    .group-members label { display: inline-block; margin-right: 8px; }
+
+    /*************** Modal 共用 ***************/
+    .modal-backdrop {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background-color: rgba(0,0,0,0.4); z-index: 999;
+    }
+    .modal {
+      background-color: #fff; width: 300px; padding: 20px; border-radius: 8px;
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    }
+    .modal h3 { margin-bottom: 10px; }
+    .modal label { display: block; margin-top: 10px; margin-bottom: 5px; }
+    .modal input[type="text"], .modal textarea { width: 100%; padding: 4px; }
+    .modal textarea { height: 80px; resize: none; }
+    .modal button { margin-top: 10px; padding: 6px 12px; border: none; border-radius: 4px;
+                    background-color: #fa8072; color: #fff; cursor: pointer; }
+    .modal button:hover { opacity: 0.8; }
+
+    /* 分組數量 Modal (調整尺寸) */
+    #groupModal .modal { width: 250px; }
+
+    /*************** 違規紀錄 Modal ***************/
+    #infractionModal, #viewInfractionModal { display: none; }
+    #viewInfractionModal .modal { width: 320px; max-height: 60vh; overflow-y: auto; }
+    
+    /*************** 隨機選擇學生 Modal ***************/
+    #randomStudentModal .modal { width: 300px; text-align: center; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>課堂加分系統</h1>
+
+  <!-- 主功能按鈕 -->
+  <div id="mainControls">
+    <input type="file" id="importFileInput" accept=".json" style="display:none;">
+    <button id="importBtn">匯入JSON</button>
+    <button id="exportBtn">匯出JSON</button>
+    <button id="addClassBtn">新增班級與學生</button>
+    <button id="groupBtn">設定分組</button>
+    <button id="monthlyChartBtn">每月統計</button>
+    <button id="randomStudentBtn">隨機選擇學生</button>
+  </div>
+
+  <!-- 月曆畫面 -->
+  <div id="calendarView">
+    <div class="calendar-header">
+      <button id="prevMonthBtn">上一個月</button>
+      <h2 id="calendarTitle">2025年2月</h2>
+      <button id="nextMonthBtn">下一個月</button>
+    </div>
+    <table class="calendar">
+      <thead>
+        <tr>
+          <th>日</th>
+          <th>一</th>
+          <th>二</th>
+          <th>三</th>
+          <th>四</th>
+          <th>五</th>
+          <th>六</th>
+        </tr>
+      </thead>
+      <tbody id="calendarBody">
+        <!-- JS 動態產生日期格子 -->
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 加扣分畫面 -->
+  <div id="scoreView">
+    <div class="btn-bar">
+      <button id="backBtn">回上一頁</button>
+    </div>
+    <h2 id="scoreDateTitle">日期: 20250213</h2>
+    <div>
+      <label for="classSelect">選擇班級：</label>
+      <select id="classSelect"></select>
+    </div>
+    <table id="scoreTable">
+      <thead>
+        <tr>
+          <th>學生編號</th>
+          <th>學生姓名</th>
+          <th>分數</th>
+          <th>加分</th>
+          <th>扣分</th>
+          <th>違規</th>
+        </tr>
+      </thead>
+      <tbody id="scoreTableBody">
+        <!-- JS 動態產生學生資料列 -->
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 每月統計圖表 -->
+  <div id="monthlyChartView">
+    <div class="chart-header">
+      <button id="monthlyChartBackBtn">回上一頁</button>
+      <select id="monthlyClassSelect"></select>
+    </div>
+    <div id="chartContainer">
+      <canvas id="myMonthlyChart"></canvas>
+    </div>
+  </div>
+
+  <!-- 分組管理畫面 -->
+  <div id="groupView">
+    <div class="btn-bar">
+      <button id="groupBackBtn">回上一頁</button>
+      <button id="applyGroupScoreBtn">更新組別分數</button>
+    </div>
+    <h2 id="groupDateTitle">分組日期: </h2>
+    <div>
+      <label for="groupClassSelect">選擇班級：</label>
+      <select id="groupClassSelect"></select>
+    </div>
+    <div id="groupContainer">
+      <!-- 系統依照輸入的組別數目產生各組面板 -->
+    </div>
+  </div>
+</div>
+
+<!-- Modal：新增班級與學生 -->
+<div class="modal-backdrop" id="addClassModalBackdrop">
+  <div class="modal">
+    <h3>新增班級與學生</h3>
+    <label for="classNameInput">班級名稱：</label>
+    <input type="text" id="classNameInput" placeholder="例如：三年甲班">
+    <label for="studentNamesInput">學生資料 (每行一位)：</label>
+    <textarea id="studentNamesInput" placeholder="例如：
+15陳小明
+20王大力"></textarea>
+    <button id="addClassSubmitBtn">送出</button>
+    <button id="addClassCancelBtn">取消</button>
+  </div>
+</div>
+
+<!-- Modal：設定分組數量 -->
+<div class="modal-backdrop" id="groupModal">
+  <div class="modal">
+    <h3>設定分組數量</h3>
+    <label for="groupCountInput">輸入分組數量：</label>
+    <input type="number" id="groupCountInput" min="1" placeholder="例如：3">
+    <button id="groupSubmitBtn">送出</button>
+    <button id="groupCancelBtn">取消</button>
+  </div>
+</div>
+
+<!-- Modal：記錄違規 -->
+<div class="modal-backdrop" id="infractionModal">
+  <div class="modal">
+    <h3>記錄違規</h3>
+    <p id="infractionStudentInfo"></p>
+    <label for="infractionReasonInput">違規原因：</label>
+    <textarea id="infractionReasonInput" placeholder="例如：上課滑手機"></textarea>
+    <button id="infractionSubmitBtn">送出</button>
+    <button id="infractionCancelBtn">取消</button>
+  </div>
+</div>
+
+<!-- Modal：查看違規 (新增刪除功能) -->
+<div class="modal-backdrop" id="viewInfractionModal">
+  <div class="modal">
+    <h3>違規紀錄</h3>
+    <p id="viewInfractionStudentInfo"></p>
+    <ul id="infractionList"></ul>
+    <button id="viewInfractionCloseBtn">關閉</button>
+  </div>
+</div>
+
+<!-- Modal：隨機選擇學生 -->
+<div class="modal-backdrop" id="randomStudentModal">
+  <div class="modal">
+    <h3>隨機選擇學生</h3>
+    <p id="randomStudentInfo"></p>
+    <button id="nextStudentBtn">下一位</button>
+    <button id="closeRandomModalBtn">關閉</button>
+  </div>
+</div>
+
+<script>
+/*******************************************
+ * 全域資料結構
+ *******************************************/
+// 所有資料：各班級包含學生，學生含：{ code, name, scores:{ date: number }, infractions: [{reason, time}], ... }
+let allData = { classes: [] };
+// 分組資料：結構為 groupData[dateKey] = { [classIdx]: { groups: [ { members: [studentIndex], groupScore, oldGroupScore } ] } }
+let groupData = {};
+// 分組數量（老師輸入後使用）
+let groupCount = 0;
+// 當前選取日期（格式 YYYYMMDD），由點選月曆時設定
+let currentScoreDate = "";
+// 日期格式化輔助
+function formatDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}${m}${day}`;
+}
+// 若尚未有選取日期，預設用今日
+const today = new Date();
+
+/*******************************************
+ * 1. 匯入 / 匯出 JSON
+ *******************************************/
+const importBtn = document.getElementById('importBtn');
+const exportBtn = document.getElementById('exportBtn');
+const importFileInput = document.getElementById('importFileInput');
+
+exportBtn.addEventListener('click', () => {
+  const dataStr = JSON.stringify(allData, null, 2);
+  const blob = new Blob([dataStr], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = "classData.json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+importBtn.addEventListener('click', () => { importFileInput.click(); });
+importFileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    try {
+      const parsed = JSON.parse(evt.target.result);
+      allData = parsed;
+      alert("匯入成功！");
+      renderCalendar(currentYear, currentMonth);
+    } catch (error) {
+      alert("JSON 格式錯誤或讀取失敗！");
+    }
+  };
+  reader.readAsText(file);
+  importFileInput.value = "";
+});
+
+/*******************************************
+ * 2. 新增班級與學生 (Modal)
+ *******************************************/
+const addClassBtn = document.getElementById('addClassBtn');
+const addClassModalBackdrop = document.getElementById('addClassModalBackdrop');
+const classNameInput = document.getElementById('classNameInput');
+const studentNamesInput = document.getElementById('studentNamesInput');
+const addClassSubmitBtn = document.getElementById('addClassSubmitBtn');
+const addClassCancelBtn = document.getElementById('addClassCancelBtn');
+
+addClassBtn.addEventListener('click', () => { addClassModalBackdrop.style.display = 'block'; });
+addClassCancelBtn.addEventListener('click', () => { closeAddClassModal(); });
+addClassSubmitBtn.addEventListener('click', () => {
+  const className = classNameInput.value.trim();
+  const studentLines = studentNamesInput.value.trim();
+  if (!className) { alert("請輸入班級名稱！"); return; }
+  if (!studentLines) { alert("請至少輸入一位學生！"); return; }
+  const studentsArr = studentLines.split('\n')
+    .map(line => parseStudentLine(line))
+    .filter(stu => stu.name !== '' || stu.code !== '');
+  if (studentsArr.length === 0) { alert("學生資料不可為空！"); return; }
+  allData.classes.push({ className, students: studentsArr });
+  alert(`已新增班級：${className}，學生數：${studentsArr.length}`);
+  closeAddClassModal();
+});
+function parseStudentLine(line) {
+  const raw = line.trim();
+  const match = raw.match(/^(\d+)(.*)$/);
+  if (match) {
+    const code = match[1].trim();
+    const name = match[2].trim();
+    return { code, name, scores: {}, infractions: [] };
+  } else {
+    return { code: '', name: raw, scores: {}, infractions: [] };
+  }
+}
+function closeAddClassModal() {
+  addClassModalBackdrop.style.display = 'none';
+  classNameInput.value = ''; studentNamesInput.value = '';
+}
+
+/*******************************************
+ * 3. 月曆產生 & 點選進入加扣分畫面
+ *******************************************/
+const calendarView = document.getElementById('calendarView');
+const scoreView = document.getElementById('scoreView');
+const calendarTitle = document.getElementById('calendarTitle');
+const calendarBody = document.getElementById('calendarBody');
+const prevMonthBtn = document.getElementById('prevMonthBtn');
+const nextMonthBtn = document.getElementById('nextMonthBtn');
+let currentYear = today.getFullYear(), currentMonth = today.getMonth();
+
+prevMonthBtn.addEventListener('click', () => {
+  currentMonth--; if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+  renderCalendar(currentYear, currentMonth);
+});
+nextMonthBtn.addEventListener('click', () => {
+  currentMonth++; if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+  renderCalendar(currentYear, currentMonth);
+});
+function renderCalendar(year, month) {
+  calendarTitle.textContent = `${year}年${month+1}月`;
+  calendarBody.innerHTML = '';
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month+1, 0);
+  const totalDays = lastDay.getDate();
+  const startDay = firstDay.getDay();
+  let currentRow = document.createElement('tr');
+  let cellCount = 0;
+  for (let i = 0; i < startDay; i++) {
+    const emptyCell = document.createElement('td'); emptyCell.classList.add('empty');
+    currentRow.appendChild(emptyCell); cellCount++;
+  }
+  for (let dateNum = 1; dateNum <= totalDays; dateNum++) {
+    const dateCell = document.createElement('td');
+    const dateLink = document.createElement('a'); dateLink.textContent = dateNum; dateLink.href = 'javascript:void(0);';
+    if (year === today.getFullYear() && month === today.getMonth() && dateNum === today.getDate()) { dateLink.classList.add('today'); }
+    dateLink.addEventListener('click', () => {
+      const y = year; const m = String(month+1).padStart(2,'0'); const d = String(dateNum).padStart(2,'0');
+      const dateKey = `${y}${m}${d}`; currentScoreDate = dateKey;
+      showScoreView(dateKey);
+    });
+    dateCell.appendChild(dateLink); currentRow.appendChild(dateCell); cellCount++;
+    if (cellCount === 7) { calendarBody.appendChild(currentRow); currentRow = document.createElement('tr'); cellCount = 0; }
+  }
+  if (cellCount > 0 && cellCount < 7) {
+    for (let i = cellCount; i < 7; i++) {
+      const emptyCell = document.createElement('td'); emptyCell.classList.add('empty'); currentRow.appendChild(emptyCell);
+    }
+    calendarBody.appendChild(currentRow);
+  }
+}
+renderCalendar(currentYear, currentMonth);
+
+/*******************************************
+ * 4. 加扣分畫面 + 違規功能
+ *******************************************/
+const backBtn = document.getElementById('backBtn');
+const scoreDateTitle = document.getElementById('scoreDateTitle');
+const classSelect = document.getElementById('classSelect');
+const scoreTableBody = document.getElementById('scoreTableBody');
+function showScoreView(dateKey) {
+  calendarView.style.display = 'none'; monthlyChartView.style.display = 'none'; groupView.style.display = 'none';
+  scoreView.style.display = 'block'; scoreDateTitle.textContent = `日期: ${dateKey}`;
+  renderClassSelect();
+  if (allData.classes.length > 0) { classSelect.selectedIndex = 0; renderScoreTable(dateKey, 0); }
+  else { scoreTableBody.innerHTML = `<tr><td colspan="6">尚未新增班級與學生</td></tr>`; }
+  classSelect.onchange = function() {
+    const classIdx = parseInt(this.value, 10);
+    renderScoreTable(dateKey, classIdx);
+  };
+}
+backBtn.addEventListener('click', () => {
+  scoreView.style.display = 'none'; monthlyChartView.style.display = 'none'; groupView.style.display = 'none';
+  calendarView.style.display = 'block';
+});
+function renderClassSelect() {
+  classSelect.innerHTML = '';
+  allData.classes.forEach((cls, idx) => {
+    const opt = document.createElement('option'); opt.value = idx; opt.textContent = cls.className;
+    classSelect.appendChild(opt);
+  });
+}
+function renderScoreTable(dateKey, classIdx) {
+  const cls = allData.classes[classIdx];
+  const students = cls.students;
+  scoreTableBody.innerHTML = '';
+  if (!students || students.length === 0) { scoreTableBody.innerHTML = `<tr><td colspan="6">此班級尚無學生</td></tr>`; return; }
+  // 計算該日期最高分
+  const scoresArr = students.map(stu => { if (stu.scores[dateKey] === undefined) { stu.scores[dateKey] = 0; } return stu.scores[dateKey]; });
+  const maxScore = Math.max(...scoresArr);
+  students.forEach((stu, sIdx) => {
+    const tr = document.createElement('tr');
+    // 學生編號
+    const codeTd = document.createElement('td'); codeTd.textContent = stu.code; tr.appendChild(codeTd);
+    // 學生姓名
+    const nameTd = document.createElement('td'); nameTd.textContent = stu.name; tr.appendChild(nameTd);
+    // 分數
+    const scoreTd = document.createElement('td'); scoreTd.textContent = stu.scores[dateKey];
+    if (stu.scores[dateKey] === maxScore && maxScore !== 0) { scoreTd.classList.add('max-score'); }
+    tr.appendChild(scoreTd);
+    // 加分
+    const plusTd = document.createElement('td');
+    const plusBtn = document.createElement('button'); plusBtn.textContent = '+'; plusBtn.className = 'plus-btn';
+    plusBtn.addEventListener('click', () => { stu.scores[dateKey]++; renderScoreTable(dateKey, classIdx); });
+    plusTd.appendChild(plusBtn); tr.appendChild(plusTd);
+    // 扣分
+    const minusTd = document.createElement('td');
+    const minusBtn = document.createElement('button'); minusBtn.textContent = '-'; minusBtn.className = 'minus-btn';
+    minusBtn.addEventListener('click', () => { stu.scores[dateKey]--; renderScoreTable(dateKey, classIdx); });
+    minusTd.appendChild(minusBtn); tr.appendChild(minusTd);
+    // 違規功能
+    const infractionTd = document.createElement('td');
+    const infractionBtn = document.createElement('button'); infractionBtn.textContent = '記錄'; infractionBtn.className = 'infraction-btn';
+    infractionBtn.addEventListener('click', () => { openInfractionModal(stu); });
+    infractionTd.appendChild(infractionBtn);
+    const viewInfractionBtn = document.createElement('button');
+    const infCount = stu.infractions ? stu.infractions.length : 0;
+    viewInfractionBtn.textContent = `查看(${infCount})`; viewInfractionBtn.className = 'view-infraction-btn';
+    viewInfractionBtn.addEventListener('click', () => { openViewInfractionModal(stu); });
+    infractionTd.appendChild(viewInfractionBtn);
+    tr.appendChild(infractionTd);
+    scoreTableBody.appendChild(tr);
+  });
+}
+
+/*******************************************
+ * 5. 違規紀錄 Modal (記錄與查看，可刪除單筆)
+ *******************************************/
+const infractionModal = document.getElementById('infractionModal');
+const infractionStudentInfo = document.getElementById('infractionStudentInfo');
+const infractionReasonInput = document.getElementById('infractionReasonInput');
+const infractionSubmitBtn = document.getElementById('infractionSubmitBtn');
+const infractionCancelBtn = document.getElementById('infractionCancelBtn');
+let currentInfractionStudent = null;
+function openInfractionModal(student) {
+  currentInfractionStudent = student;
+  infractionStudentInfo.textContent = `學生：${student.code} ${student.name}`;
+  infractionReasonInput.value = '';
+  infractionModal.style.display = 'block';
+}
+infractionSubmitBtn.addEventListener('click', () => {
+  const reason = infractionReasonInput.value.trim();
+  if (!reason) { alert("請輸入違規原因！"); return; }
+  const now = new Date(); const timeStr = now.toLocaleString();
+  if (!currentInfractionStudent.infractions) { currentInfractionStudent.infractions = []; }
+  currentInfractionStudent.infractions.push({ reason, time: timeStr });
+  closeInfractionModal();
+  const dateKey = scoreDateTitle.textContent.replace('日期: ', '');
+  const classIdx = parseInt(classSelect.value, 10);
+  renderScoreTable(dateKey, classIdx);
+});
+infractionCancelBtn.addEventListener('click', closeInfractionModal);
+function closeInfractionModal() { infractionModal.style.display = 'none'; currentInfractionStudent = null; }
+const viewInfractionModal = document.getElementById('viewInfractionModal');
+const viewInfractionStudentInfo = document.getElementById('viewInfractionStudentInfo');
+const infractionList = document.getElementById('infractionList');
+const viewInfractionCloseBtn = document.getElementById('viewInfractionCloseBtn');
+function openViewInfractionModal(student) {
+  viewInfractionStudentInfo.textContent = `學生：${student.code} ${student.name}`;
+  infractionList.innerHTML = '';
+  if (!student.infractions || student.infractions.length === 0) {
+    const li = document.createElement('li'); li.textContent = '目前無違規紀錄。'; infractionList.appendChild(li);
+  } else {
+    student.infractions.forEach((inf, idx) => {
+      const li = document.createElement('li');
+      li.textContent = `${idx+1}. [${inf.time}] ${inf.reason} `;
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '刪除'; delBtn.style.fontSize = '10px';
+      delBtn.addEventListener('click', () => { 
+        if (confirm("確定刪除此筆違規記錄？")) {
+          student.infractions.splice(idx, 1);
+          openViewInfractionModal(student);
+          const dateKey = scoreDateTitle.textContent.replace('日期: ', '');
+          const classIdx = parseInt(classSelect.value, 10);
+          renderScoreTable(dateKey, classIdx);
+        }
+      });
+      li.appendChild(delBtn);
+      infractionList.appendChild(li);
+    });
+  }
+  viewInfractionModal.style.display = 'block';
+}
+viewInfractionCloseBtn.addEventListener('click', () => { viewInfractionModal.style.display = 'none'; infractionList.innerHTML = ''; });
+
+/*******************************************
+ * 6. 每月統計圖表
+ *******************************************/
+const monthlyChartView = document.getElementById('monthlyChartView');
+const monthlyChartBackBtn = document.getElementById('monthlyChartBackBtn');
+const monthlyClassSelect = document.getElementById('monthlyClassSelect');
+const monthlyChartBtn = document.getElementById('monthlyChartBtn');
+let myMonthlyChart = null;
+monthlyChartBtn.addEventListener('click', () => {
+  calendarView.style.display = 'none'; scoreView.style.display = 'none'; groupView.style.display = 'none';
+  monthlyChartView.style.display = 'block';
+  monthlyClassSelect.innerHTML = '';
+  allData.classes.forEach((cls, idx) => {
+    const opt = document.createElement('option'); opt.value = idx; opt.textContent = cls.className;
+    monthlyClassSelect.appendChild(opt);
+  });
+  if (allData.classes.length > 0) { monthlyClassSelect.selectedIndex = 0; renderMonthlyChart(currentYear, currentMonth, 0); }
+  else { destroyMonthlyChart(); }
+  monthlyClassSelect.onchange = function() {
+    const classIdx = parseInt(this.value, 10);
+    renderMonthlyChart(currentYear, currentMonth, classIdx);
+  };
+});
+monthlyChartBackBtn.addEventListener('click', () => {
+  monthlyChartView.style.display = 'none'; scoreView.style.display = 'none'; groupView.style.display = 'none';
+  calendarView.style.display = 'block';
+});
+function renderMonthlyChart(year, month, classIdx) {
+  destroyMonthlyChart(); if (allData.classes.length === 0) return;
+  const cls = allData.classes[classIdx]; const students = cls.students;
+  const yearStr = String(year); const monthStr = String(month+1).padStart(2, '0');
+  const labels = []; const dataScores = [];
+  students.forEach(stu => {
+    let total = 0;
+    for (const dateKey in stu.scores) {
+      if (dateKey.startsWith(yearStr+monthStr)) { total += stu.scores[dateKey]; }
+    }
+    labels.push(`${stu.code} ${stu.name}`); dataScores.push(total);
+  });
+  const ctx = document.getElementById('myMonthlyChart').getContext('2d');
+  myMonthlyChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [{ label: `${year}年${month+1}月 總分`, data: dataScores, backgroundColor: 'rgba(54, 162, 235, 0.7)' }] },
+    options: { scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true } },
+      plugins: { legend: { display: false } }, responsive: true, maintainAspectRatio: false }
+  });
+}
+function destroyMonthlyChart() { if (myMonthlyChart) { myMonthlyChart.destroy(); myMonthlyChart = null; } }
+
+/*******************************************
+ * 7. 分組功能修改：分組管理畫面
+ *******************************************/
+const groupBtn = document.getElementById('groupBtn');
+const groupModal = document.getElementById('groupModal');
+const groupCountInput = document.getElementById('groupCountInput');
+const groupSubmitBtn = document.getElementById('groupSubmitBtn');
+const groupCancelBtn = document.getElementById('groupCancelBtn');
+const groupView = document.getElementById('groupView');
+const groupDateTitle = document.getElementById('groupDateTitle');
+const groupClassSelect = document.getElementById('groupClassSelect');
+const groupContainer = document.getElementById('groupContainer');
+const groupBackBtn = document.getElementById('groupBackBtn');
+const applyGroupScoreBtn = document.getElementById('applyGroupScoreBtn');
+
+groupBtn.addEventListener('click', () => { groupModal.style.display = 'block'; });
+groupCancelBtn.addEventListener('click', () => { closeGroupModal(); });
+groupSubmitBtn.addEventListener('click', () => {
+  const val = parseInt(groupCountInput.value, 10);
+  if (isNaN(val) || val <= 0) { alert("請輸入正確的分組數量！"); return; }
+  groupCount = val;
+  closeGroupModal();
+  const dateKey = currentScoreDate || formatDate(new Date());
+  showGroupView(dateKey);
+});
+function closeGroupModal() { groupModal.style.display = 'none'; groupCountInput.value = ''; }
+groupBackBtn.addEventListener('click', () => {
+  groupView.style.display = 'none';
+  calendarView.style.display = 'block';
+});
+function showGroupView(dateKey) {
+  groupView.style.display = 'block'; scoreView.style.display = 'none'; monthlyChartView.style.display = 'none';
+  groupDateTitle.textContent = `分組日期: ${dateKey}`;
+  if (!groupData[dateKey]) { groupData[dateKey] = {}; }
+  groupClassSelect.innerHTML = '';
+  allData.classes.forEach((cls, idx) => {
+    const opt = document.createElement('option'); opt.value = idx; opt.textContent = cls.className;
+    groupClassSelect.appendChild(opt);
+  });
+  groupClassSelect.onchange = function() {
+    const classIdx = parseInt(this.value, 10);
+    renderGroupContainer(dateKey, classIdx);
+  };
+  if (allData.classes.length > 0) {
+    groupClassSelect.selectedIndex = 0;
+    renderGroupContainer(dateKey, 0);
+  } else { groupContainer.innerHTML = '尚未新增班級與學生'; }
+}
+function renderGroupContainer(dateKey, classIdx) {
+  if (!groupData[dateKey][classIdx]) {
+    groupData[dateKey][classIdx] = { groups: [] };
+    for (let i = 0; i < groupCount; i++) {
+      groupData[dateKey][classIdx].groups.push({ members: [], groupScore: 0, oldGroupScore: 0 });
+    }
+  } else {
+    if (groupData[dateKey][classIdx].groups.length !== groupCount) {
+      groupData[dateKey][classIdx].groups = [];
+      for (let i = 0; i < groupCount; i++) {
+        groupData[dateKey][classIdx].groups.push({ members: [], groupScore: 0, oldGroupScore: 0 });
+      }
+    }
+  }
+  groupContainer.innerHTML = '';
+  const cls = allData.classes[classIdx];
+  groupData[dateKey][classIdx].groups.forEach((group, gIdx) => {
+    const panel = document.createElement('div'); panel.className = 'group-panel';
+    const title = document.createElement('h3'); title.textContent = `組 ${gIdx+1}`;
+    panel.appendChild(title);
+    const scoreDiv = document.createElement('div'); scoreDiv.className = 'group-score';
+    const scoreSpan = document.createElement('span'); scoreSpan.textContent = `分數: ${group.groupScore}`;
+    scoreDiv.appendChild(scoreSpan);
+    const plusBtn = document.createElement('button'); plusBtn.textContent = '+';
+    plusBtn.addEventListener('click', () => { group.groupScore++; scoreSpan.textContent = `分數: ${group.groupScore}`; });
+    scoreDiv.appendChild(plusBtn);
+    const minusBtn = document.createElement('button'); minusBtn.textContent = '-';
+    minusBtn.addEventListener('click', () => { group.groupScore--; scoreSpan.textContent = `分數: ${group.groupScore}`; });
+    scoreDiv.appendChild(minusBtn);
+    panel.appendChild(scoreDiv);
+    const membersDiv = document.createElement('div'); membersDiv.className = 'group-members';
+    membersDiv.textContent = '組員：';
+    cls.students.forEach((stu, sIdx) => {
+      const label = document.createElement('label');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      if (group.members.includes(sIdx)) { checkbox.checked = true; }
+      checkbox.addEventListener('change', (e) => {
+        if (e.target.checked) {
+          removeStudentFromAllGroups(dateKey, classIdx, sIdx);
+          group.members.push(sIdx);
+          renderGroupContainer(dateKey, classIdx);
+        } else {
+          group.members = group.members.filter(idx => idx !== sIdx);
+        }
+      });
+      label.appendChild(checkbox);
+      label.appendChild(document.createTextNode(`${stu.code} ${stu.name}`));
+      membersDiv.appendChild(label);
+    });
+    panel.appendChild(membersDiv);
+    groupContainer.appendChild(panel);
+  });
+}
+function removeStudentFromAllGroups(dateKey, classIdx, studentIndex) {
+  groupData[dateKey][classIdx].groups.forEach(group => {
+    group.members = group.members.filter(idx => idx !== studentIndex);
+  });
+}
+applyGroupScoreBtn.addEventListener('click', () => {
+  const classIdx = parseInt(groupClassSelect.value, 10);
+  const dateKey = currentScoreDate || formatDate(new Date());
+  const groups = groupData[dateKey][classIdx].groups;
+  const cls = allData.classes[classIdx];
+  groups.forEach(group => {
+    const delta = group.groupScore - group.oldGroupScore;
+    if (delta !== 0) {
+      group.members.forEach(studentIndex => {
+        const stu = cls.students[studentIndex];
+        if (stu.scores[dateKey] === undefined) { stu.scores[dateKey] = 0; }
+        stu.scores[dateKey] += delta;
+      });
+      group.oldGroupScore = group.groupScore;
+    }
+  });
+  alert("組別分數已更新，個人分數同步調整！");
+  if(scoreView.style.display==='block'){
+    renderScoreTable(dateKey, classIdx);
+  }
+});
+
+/*******************************************
+ * 8. 隨機選擇學生功能 (僅取當前班別學生)
+ *******************************************/
+// 修改：僅從當前班別中取得學生
+const randomStudentBtn = document.getElementById('randomStudentBtn');
+const randomStudentModal = document.getElementById('randomStudentModal');
+const randomStudentInfo = document.getElementById('randomStudentInfo');
+const nextStudentBtn = document.getElementById('nextStudentBtn');
+const closeRandomModalBtn = document.getElementById('closeRandomModalBtn');
+// 取得當前班別的學生（優先使用加扣分畫面的下拉選單，如果不可用則預設第一個班級）
+function getCurrentClassStudents() {
+  let selectedClassIndex = 0;
+  if (scoreView.style.display === 'block' && classSelect && classSelect.options.length > 0) {
+    selectedClassIndex = parseInt(classSelect.value, 10) || 0;
+  } else if (allData.classes.length > 0) {
+    selectedClassIndex = 0;
+  }
+  if (allData.classes.length > 0) {
+    return allData.classes[selectedClassIndex].students;
+  }
+  return [];
+}
+function pickRandomStudent() {
+  const students = getCurrentClassStudents();
+  if (students.length === 0) return null;
+  const index = Math.floor(Math.random() * students.length);
+  return students[index];
+}
+function showRandomStudent() {
+  const student = pickRandomStudent();
+  if (!student) {
+    randomStudentInfo.textContent = "該班尚無學生資料";
+  } else {
+    randomStudentInfo.textContent = `學號：${student.code}  姓名：${student.name}`;
+  }
+}
+randomStudentBtn.addEventListener('click', () => {
+  randomStudentModal.style.display = 'block';
+  showRandomStudent();
+});
+nextStudentBtn.addEventListener('click', () => { showRandomStudent(); });
+closeRandomModalBtn.addEventListener('click', () => { randomStudentModal.style.display = 'none'; });
+</script>
+</body>
+</html>
