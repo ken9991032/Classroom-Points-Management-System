@@ -54,7 +54,14 @@
     }
     #scoreView .btn-bar button:hover { opacity: 0.8; }
     #scoreDateTitle { margin-bottom: 10px; }
-    #classSelect { margin-bottom: 10px; padding: 4px; }
+    /* 新增班級下拉與操作按鈕 */
+    #classSelectContainer { margin-bottom: 10px; }
+    #classSelect { padding: 4px; }
+    #classSelectContainer button {
+      margin-left: 5px; padding: 4px 8px; border: none; border-radius: 4px;
+      background-color: #2db082; color: #fff; cursor: pointer;
+    }
+    #classSelectContainer button:hover { opacity: 0.85; }
     #scoreTable { margin: 0 auto; border-collapse: collapse; min-width: 550px; }
     #scoreTable th, #scoreTable td { border: 1px solid #ccc; padding: 8px 12px; text-align: center; }
     .plus-btn, .minus-btn {
@@ -124,6 +131,11 @@
     
     /*************** 隨機選擇學生 Modal ***************/
     #randomStudentModal .modal { width: 300px; text-align: center; }
+
+    /* 新增學生 Modal */
+    #addStudentModal .modal { width: 300px; }
+    /* 刪除學生 Modal */
+    #deleteStudentModal .modal { width: 300px; }
   </style>
 </head>
 <body>
@@ -172,9 +184,11 @@
       <button id="backBtn">回上一頁</button>
     </div>
     <h2 id="scoreDateTitle">日期: 20250213</h2>
-    <div>
+    <div id="classSelectContainer">
       <label for="classSelect">選擇班級：</label>
       <select id="classSelect"></select>
+      <button id="addStudentBtn">新增學生</button>
+      <button id="deleteStudentBtn">刪除學生</button>
     </div>
     <table id="scoreTable">
       <thead>
@@ -221,7 +235,7 @@
   </div>
 </div>
 
-<!-- Modal：新增班級與學生 -->
+<!-- Modal：新增班級與學生 (原始) -->
 <div class="modal-backdrop" id="addClassModalBackdrop">
   <div class="modal">
     <h3>新增班級與學生</h3>
@@ -233,6 +247,30 @@
 20王大力"></textarea>
     <button id="addClassSubmitBtn">送出</button>
     <button id="addClassCancelBtn">取消</button>
+  </div>
+</div>
+
+<!-- Modal：新增學生 (新增到現有班級) -->
+<div class="modal-backdrop" id="addStudentModal">
+  <div class="modal">
+    <h3>新增學生</h3>
+    <label for="newStudentCode">學生編號：</label>
+    <input type="text" id="newStudentCode" placeholder="例如：15">
+    <label for="newStudentName">學生姓名：</label>
+    <input type="text" id="newStudentName" placeholder="例如：陳小明">
+    <button id="newStudentSubmitBtn">送出</button>
+    <button id="newStudentCancelBtn">取消</button>
+  </div>
+</div>
+
+<!-- Modal：刪除學生 (從現有班級中選擇) -->
+<div class="modal-backdrop" id="deleteStudentModal">
+  <div class="modal">
+    <h3>刪除學生</h3>
+    <label for="deleteStudentSelect">選擇要刪除的學生：</label>
+    <select id="deleteStudentSelect"></select>
+    <button id="deleteStudentSubmitBtn">刪除</button>
+    <button id="deleteStudentCancelBtn">取消</button>
   </div>
 </div>
 
@@ -747,7 +785,6 @@ applyGroupScoreBtn.addEventListener('click', () => {
 /*******************************************
  * 8. 隨機選擇學生功能 (僅取當前班別學生)
  *******************************************/
-// 修改：僅從當前班別中取得學生
 const randomStudentBtn = document.getElementById('randomStudentBtn');
 const randomStudentModal = document.getElementById('randomStudentModal');
 const randomStudentInfo = document.getElementById('randomStudentInfo');
@@ -786,6 +823,73 @@ randomStudentBtn.addEventListener('click', () => {
 });
 nextStudentBtn.addEventListener('click', () => { showRandomStudent(); });
 closeRandomModalBtn.addEventListener('click', () => { randomStudentModal.style.display = 'none'; });
+
+/*******************************************
+ * 9. 新增/刪除學生功能 (在班別畫面)
+ *******************************************/
+// 新增學生 Modal
+const addStudentModal = document.getElementById('addStudentModal');
+const newStudentCode = document.getElementById('newStudentCode');
+const newStudentName = document.getElementById('newStudentName');
+const newStudentSubmitBtn = document.getElementById('newStudentSubmitBtn');
+const newStudentCancelBtn = document.getElementById('newStudentCancelBtn');
+// 刪除學生 Modal
+const deleteStudentModal = document.getElementById('deleteStudentModal');
+const deleteStudentSelect = document.getElementById('deleteStudentSelect');
+const deleteStudentSubmitBtn = document.getElementById('deleteStudentSubmitBtn');
+const deleteStudentCancelBtn = document.getElementById('deleteStudentCancelBtn');
+
+// 加扣分畫面的新增/刪除學生按鈕
+const addStudentBtn = document.getElementById('addStudentBtn');
+const deleteStudentBtn = document.getElementById('deleteStudentBtn');
+
+addStudentBtn.addEventListener('click', () => {
+  // 顯示新增學生 Modal，並清空輸入框
+  newStudentCode.value = "";
+  newStudentName.value = "";
+  addStudentModal.style.display = 'block';
+});
+newStudentCancelBtn.addEventListener('click', () => { addStudentModal.style.display = 'none'; });
+newStudentSubmitBtn.addEventListener('click', () => {
+  const code = newStudentCode.value.trim();
+  const name = newStudentName.value.trim();
+  if (!name) { alert("請輸入學生姓名！"); return; }
+  // 取得目前選擇的班級
+  const classIdx = parseInt(classSelect.value, 10);
+  const newStudent = { code, name, scores: {}, infractions: [] };
+  allData.classes[classIdx].students.push(newStudent);
+  alert(`已新增學生：${code} ${name}`);
+  addStudentModal.style.display = 'none';
+  // 更新分數表
+  const dateKey = scoreDateTitle.textContent.replace('日期: ', '');
+  renderScoreTable(dateKey, classIdx);
+});
+
+deleteStudentBtn.addEventListener('click', () => {
+  // 取得目前班級的學生，填入下拉選單
+  const classIdx = parseInt(classSelect.value, 10);
+  const students = allData.classes[classIdx].students;
+  deleteStudentSelect.innerHTML = "";
+  students.forEach((stu, idx) => {
+    const opt = document.createElement('option');
+    opt.value = idx;
+    opt.textContent = `${stu.code} ${stu.name}`;
+    deleteStudentSelect.appendChild(opt);
+  });
+  deleteStudentModal.style.display = 'block';
+});
+deleteStudentCancelBtn.addEventListener('click', () => { deleteStudentModal.style.display = 'none'; });
+deleteStudentSubmitBtn.addEventListener('click', () => {
+  const classIdx = parseInt(classSelect.value, 10);
+  const studentIdx = parseInt(deleteStudentSelect.value, 10);
+  if (confirm("確定刪除此學生？")) {
+    allData.classes[classIdx].students.splice(studentIdx, 1);
+    alert("學生已刪除！");
+    deleteStudentModal.style.display = 'none';
+    const dateKey = scoreDateTitle.textContent.replace('日期: ', '');
+    renderScoreTable(dateKey, classIdx);
+  }
+});
 </script>
 </body>
 </html>
